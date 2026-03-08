@@ -1,0 +1,20 @@
+[en]
+MS_MODEL_ATTENTION = Attention!
+MS_MODEL_CURRENT_MODEL_NAME = Current Model
+MS_MODEL_MENU_BACK = Back
+MS_MODEL_MENU_EXIT = Exit
+MS_MODEL_MENU_NAME = Select Model
+MS_MODEL_MENU_NEXT = Next
+MS_MODEL_MENU_RESET_MODEL = Reset model
+MS_MODEL_PLAYER_SET_MODEL = You set model:
+
+
+[ru]
+MS_MODEL_ATTENTION = Внимание!
+MS_MODEL_CURRENT_MODEL_NAME = ТЕКУЩАЯ МОДЕЛЬ
+MS_MODEL_MENU_BACK = Назад
+MS_MODEL_MENU_EXIT = Выход
+MS_MODEL_MENU_NAME = ВЫБОР МОДЕЛИ
+MS_MODEL_MENU_NEXT = Вперед
+MS_MODEL_MENU_RESET_MODEL = Сбросить модель
+MS_MODEL_PLAYER_SET_MODEL = Вы установили модель: 
