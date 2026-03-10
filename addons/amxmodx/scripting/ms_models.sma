@@ -248,53 +248,65 @@ public Create_Model_Menu(id)
 		new ModelMenu = menu_create(sMenuName, "ModelMenu_handler");
 		new iBlankItemCallback = menu_makecallback("MenuBlankItemCallback");
 		new iUserModelCount = 0;
+		new iModelsOnPage = 0;
 		new iUserFlags = get_user_flags(id);
 		new TeamName:iUserTeam = get_member(id, m_iTeam);
+		new sResetMenuItem[MAX_PARSE_TEXT];
 
-		if (iUserTeam == TEAM_TERRORIST)	//	Команда Террористы
-		{
-			for(new i=0; i < g_iLoadModelCount; i++)
-			{			
-				if((equal(g_aModelTeam[i], "T") || equal(g_aModelTeam[i], "ANY")) && (iUserFlags & read_flags(g_aModelAccess[i])))	//	Если команда модели T или ANY и у пользователя есть соответствующий флаг в правах доступа.
-				{
-					menu_additem(ModelMenu, g_aModelName[i], g_aModelFile[i]);
-					iUserModelCount++;
-				}
-			}
-		} 
-		else if (iUserTeam == TEAM_CT)	//	Команда Контр-Террористы
-		{
-			for(new i=0; i < g_iLoadModelCount; i++)
-			{			
-				if((equal(g_aModelTeam[i], "CT") || equal(g_aModelTeam[i], "ANY")) && (iUserFlags & read_flags(g_aModelAccess[i])))	//	Если команда модели CT или ANY и у пользователя есть соответствующий флаг в правах доступа.
-				{
-					menu_additem(ModelMenu, g_aModelName[i], g_aModelFile[i]);
-					iUserModelCount++;
-				}
-			}
-		} 
-		else if (iUserTeam == TEAM_SPECTATOR)	//	Команда Наблюдатель
+		formatex(sResetMenuItem, charsmax(sResetMenuItem), "%L", id, "MS_MODEL_MENU_RESET_MODEL");
+
+		if (iUserTeam == TEAM_SPECTATOR)	//	Команда Наблюдатель
 		{
 			log_amx("Команда игрока Наблюдатель");
 			client_cmd(id, "spk sound/events/friend_died.wav");
 			return PLUGIN_HANDLED;
 		}
-		else
+		else if (iUserTeam != TEAM_TERRORIST && iUserTeam != TEAM_CT)
 		{
 			log_amx("Команда игрока еще не выбрана");
 			return PLUGIN_HANDLED;
 		}
 
-		if(iUserModelCount)
+		for(new i = 0; i < g_iLoadModelCount; i++)
 		{
-			new iBlankItemCount = (6 - (iUserModelCount % 7) + 7) % 7;
-			for(new i = 0; i < iBlankItemCount; i++)
+			if(!(iUserFlags & read_flags(g_aModelAccess[i])))
 			{
-				menu_additem(ModelMenu, " ", "empty", 0, iBlankItemCallback);
+				continue;
 			}
 
-			formatex(sMenuName, charsmax(sMenuName), "%L", id, "MS_MODEL_MENU_RESET_MODEL");
-			menu_additem(ModelMenu, sMenuName, "reset");
+			if(iUserTeam == TEAM_TERRORIST && !(equal(g_aModelTeam[i], "T") || equal(g_aModelTeam[i], "ANY")))
+			{
+				continue;
+			}
+
+			if(iUserTeam == TEAM_CT && !(equal(g_aModelTeam[i], "CT") || equal(g_aModelTeam[i], "ANY")))
+			{
+				continue;
+			}
+
+			menu_additem(ModelMenu, g_aModelName[i], g_aModelFile[i]);
+			iUserModelCount++;
+			iModelsOnPage++;
+
+			if(iModelsOnPage == 6)
+			{
+				menu_additem(ModelMenu, sResetMenuItem, "reset");
+				iModelsOnPage = 0;
+			}
+		}
+
+		if(iUserModelCount)
+		{
+			if(iModelsOnPage > 0)
+			{
+				for(new i = iModelsOnPage; i < 6; i++)
+				{
+					menu_additem(ModelMenu, " ", "empty", 0, iBlankItemCallback);
+				}
+
+				menu_additem(ModelMenu, sResetMenuItem, "reset");
+			}
+
 			client_cmd(id, "spk sound/events/tutor_msg.wav");
 		}
 
@@ -317,10 +329,12 @@ public Create_Model_Menu(id)
 	return PLUGIN_HANDLED;
 }
 
+
 public MenuBlankItemCallback(id, menu, item)
 {
 	return ITEM_DISABLED;
 }
+
 
 UpdateCurrentModelData(id)
 {
