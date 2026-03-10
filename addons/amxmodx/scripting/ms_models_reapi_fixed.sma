@@ -1,18 +1,6 @@
 /*
  * Masks-Show Models (ReAPI edition)
- * Исправленная и адаптированная версия под ReHLDS + ReAPI
- *
- * Исправлено:
- *  - Выход за пределы массивов
- *  - Ошибка get_user_userid вместо id
- *  - Асинхронная логика query_client_cvar
- *  - Переполнение MAX_MODEL_COUNT
- *  - Утечки task при выходе игрока
- *  - Устаревшие cstrike-функции
- *
- * Требования:
- *  - ReHLDS
- *  - ReAPI
+ * Плагин выбора моделей игроков для ReHLDS/ReGameDLL + ReAPI.
  */
 
 #include <amxmodx>
@@ -22,35 +10,34 @@
 #pragma semicolon 1
 
 #define PLUGIN  "Masks-Show Models"
-#define VERSION "2.0.0-ReAPI"
-#define AUTHOR  "WAW555 / audit+fix by ChatGPT"
+#define VERSION "2.1.0-ReAPI"
+#define AUTHOR  "WAW555 / reapi refactor by Codex"
 
 #define SETTINGS_FILE "ms_models.ini"
 
-#define MAX_MODELS      128
-#define MAX_PLAYERS     32
-#define MAX_NAME        128
-#define MAX_FILE        128
-#define MAX_TEAM        4
-#define MAX_ACCESS      32
-#define MAX_PATH        256
+#define MAX_MODELS 128
+#define MAX_NAME   128
+#define MAX_FILE   128
+#define MAX_TEAM   4
+#define MAX_ACCESS 32
+#define MAX_PATH   256
 
-#define TASK_MENU       5987
+#define TASKID_MENU 5987
 
-new g_ModelCount;
+new g_iModelCount;
 
-new g_ModelName[MAX_MODELS][MAX_NAME];
-new g_ModelFile[MAX_MODELS][MAX_FILE];
-new g_ModelTeam[MAX_MODELS][MAX_TEAM];
-new g_ModelAccess[MAX_MODELS][MAX_ACCESS];
-new g_ModelPath[MAX_MODELS][MAX_PATH];
+new g_szModelName[MAX_MODELS][MAX_NAME];
+new g_szModelFile[MAX_MODELS][MAX_FILE];
+new g_szModelTeam[MAX_MODELS][MAX_TEAM];
+new g_szModelAccess[MAX_MODELS][MAX_ACCESS];
+new g_szModelPath[MAX_MODELS][MAX_PATH];
 
-new g_PlayerModelName[MAX_PLAYERS + 1][MAX_NAME];
-new g_PlayerModelFile[MAX_PLAYERS + 1][MAX_FILE];
+new g_szPlayerModelName[MAX_PLAYERS + 1][MAX_NAME];
+new g_szPlayerModelFile[MAX_PLAYERS + 1][MAX_FILE];
+new bool:g_bPlayerMinModelsBlocked[MAX_PLAYERS + 1];
+new bool:g_bMenuShownOnce[MAX_PLAYERS + 1];
 
-new bool:g_MinModelsBlocked[MAX_PLAYERS + 1];
-
-new g_msgSayText;
+new g_iMsgSayText;
 
 public plugin_init()
 {
@@ -58,15 +45,16 @@ public plugin_init()
 
     register_dictionary("ms_models.txt");
 
-    register_clcmd("say /model", "Cmd_OpenMenu");
-    register_clcmd("say /models", "Cmd_OpenMenu");
-    register_clcmd("ms_models", "Cmd_OpenMenu");
+    register_clcmd("say /model", "CmdOpenMenu");
+    register_clcmd("say /models", "CmdOpenMenu");
+    register_clcmd("say_team /model", "CmdOpenMenu");
+    register_clcmd("say_team /models", "CmdOpenMenu");
+    register_concmd("ms_models", "CmdOpenMenu", ADMIN_ALL);
 
-    RegisterHookChain(RG_CBasePlayer_Spawn, "HC_PlayerSpawn", true);
-        // Хук смены команды (совместимый ReAPI)
-    RegisterHookChain(RG_CBasePlayer_SetTeam, "HC_ChangeTeam", true);
+    RegisterHookChain(RG_CBasePlayer_Spawn, "OnPlayerSpawn_Post", true);
+    RegisterHookChain(RG_CBasePlayer_SetTeam, "OnPlayerSetTeam_Post", true);
 
-    g_msgSayText = get_user_msgid("SayText");
+    g_iMsgSayText = get_user_msgid("SayText");
 }
 
 public plugin_precache()
@@ -74,118 +62,144 @@ public plugin_precache()
     LoadModels();
 }
 
-LoadModels()
+public client_putinserver(id)
 {
-    new path[256];
-    get_configsdir(path, charsmax(path));
-    format(path, charsmax(path), "%s/%s", path, SETTINGS_FILE);
-
-    if(!file_exists(path))
-    {
-        log_amx("[MS MODELS] Файл %s не найден", path);
-        return;
-    }
-
-    new fp = fopen(path, "r");
-    if(!fp) return;
-
-    new line[512];
-    new name[MAX_NAME], file[MAX_FILE], team[MAX_TEAM], access[MAX_ACCESS];
-
-    while(!feof(fp))
-    {
-        fgets(fp, line, charsmax(line));
-        trim(line);
-
-        if(!line[0] || line[0] == ';' || line[0] == '#')
-            continue;
-
-        if(g_ModelCount >= MAX_MODELS)
-            break;
-
-        parse(line, name, charsmax(name), file, charsmax(file), team, charsmax(team), access, charsmax(access));
-
-        new fileNoExt[MAX_FILE];
-        copyc(fileNoExt, charsmax(fileNoExt), file, '.');
-
-        format(g_ModelPath[g_ModelCount], MAX_PATH - 1, "models/player/%s/%s.mdl", fileNoExt, fileNoExt);
-
-        if(!file_exists(g_ModelPath[g_ModelCount]))
-        {
-            log_amx("[MS MODELS] Не найден файл %s", g_ModelPath[g_ModelCount]);
-            continue;
-        }
-
-        copy(g_ModelName[g_ModelCount], charsmax(g_ModelName[]), name);
-        copy(g_ModelFile[g_ModelCount], charsmax(g_ModelFile[]), fileNoExt);
-        copy(g_ModelTeam[g_ModelCount], charsmax(g_ModelTeam[]), team);
-        copy(g_ModelAccess[g_ModelCount], charsmax(g_ModelAccess[]), access);
-
-        precache_model(g_ModelPath[g_ModelCount]);
-
-        g_ModelCount++;
-    }
-
-    fclose(fp);
-    log_amx("[MS MODELS] Загружено моделей: %d", g_ModelCount);
+    ResetPlayerState(id);
 }
 
-public Cmd_OpenMenu(id)
+public client_disconnected(id)
 {
-    if(!is_user_alive(id)) return PLUGIN_HANDLED;
+    remove_task(id + TASKID_MENU);
+    ResetPlayerState(id);
+}
 
-    query_client_cvar(id, "cl_minmodels", "CvarCallback");
+public CmdOpenMenu(id)
+{
+    if(!is_user_connected(id) || is_user_bot(id) || is_user_hltv(id))
+    {
+        return PLUGIN_HANDLED;
+    }
+
+    if(!IsPlayableTeam(get_member(id, m_iTeam)))
+    {
+        client_printc(id, "\g%L \dВыберите команду для выбора модели.", id, "MS_MODEL_ATTENTION");
+        return PLUGIN_HANDLED;
+    }
+
+    query_client_cvar(id, "cl_minmodels", "OnMinModelsCvar");
     return PLUGIN_HANDLED;
 }
 
-public CvarCallback(id, const cvar[], const value[])
+public OnMinModelsCvar(id, const cvar[], const value[])
 {
-    g_MinModelsBlocked[id] = !equal(value, "0");
-
-    if(g_MinModelsBlocked[id])
+    if(!is_user_connected(id))
     {
-        client_printc(id, "\gДля использования моделей установите cl_minmodels 0");
         return;
     }
 
-    ShowMenu(id);
-}
+    g_bPlayerMinModelsBlocked[id] = !equal(value, "0");
 
-ShowMenu(id)
-{
-    new title[192];
-    formatex(title, charsmax(title), "\w%L", id, "MS_MODEL_MENU_NAME");
-
-    new menu = menu_create(title, "MenuHandler");
-
-    new team = get_member(id, m_iTeam);
-    new count;
-
-    for(new i = 0; i < g_ModelCount; i++)
+    if(g_bPlayerMinModelsBlocked[id])
     {
-        if(!(get_user_flags(id) & read_flags(g_ModelAccess[i])))
-            continue;
-
-        if(!equal(g_ModelTeam[i], "ANY"))
-        {
-            if(team == TEAM_TERRORIST && !equal(g_ModelTeam[i], "T")) continue;
-            if(team == TEAM_CT && !equal(g_ModelTeam[i], "CT")) continue;
-        }
-
-        menu_additem(menu, g_ModelName[i], g_ModelFile[i]);
-        count++;
+        client_printc(id, "\gДля доступа к моделям установите cl_minmodels 0");
+        return;
     }
 
-    if(count)
+    ShowModelsMenu(id);
+}
+
+public OnPlayerSpawn_Post(id)
+{
+    if(!is_user_alive(id) || is_user_bot(id) || is_user_hltv(id))
+    {
+        return;
+    }
+
+    if(g_szPlayerModelFile[id][0])
+    {
+        rg_set_user_model(id, g_szPlayerModelFile[id]);
+    }
+    else if(!g_bMenuShownOnce[id])
+    {
+        g_bMenuShownOnce[id] = true;
+        set_task(2.0, "TaskOpenMenu", id);
+    }
+}
+
+public OnPlayerSetTeam_Post(const id, const TeamName:iTeam, bool:bCheckIfPlayerAlive)
+{
+    if(!is_user_connected(id))
+    {
+        return HC_CONTINUE;
+    }
+
+    if(!IsPlayableTeam(iTeam))
+    {
+        return HC_CONTINUE;
+    }
+
+    rg_reset_user_model(id);
+    g_szPlayerModelName[id][0] = '^0';
+    g_szPlayerModelFile[id][0] = '^0';
+
+    remove_task(id);
+    set_task(2.0, "TaskOpenMenu", id);
+
+    return HC_CONTINUE;
+}
+
+public TaskOpenMenu(id)
+{
+    if(!is_user_connected(id) || !IsPlayableTeam(get_member(id, m_iTeam)))
+    {
+        return;
+    }
+
+    query_client_cvar(id, "cl_minmodels", "OnMinModelsCvar");
+}
+
+ShowModelsMenu(id)
+{
+    new menuTitle[192];
+    if(g_szPlayerModelName[id][0])
+    {
+        formatex(menuTitle, charsmax(menuTitle), "\w%L \r%s^n^n\y%L", id, "MS_MODEL_CURRENT_MODEL_NAME", g_szPlayerModelName[id], id, "MS_MODEL_MENU_NAME");
+    }
+    else
+    {
+        formatex(menuTitle, charsmax(menuTitle), "\w%L", id, "MS_MODEL_MENU_NAME");
+    }
+
+    new menu = menu_create(menuTitle, "ModelsMenuHandler");
+    new TeamName:team = get_member(id, m_iTeam);
+    new availableCount;
+
+    for(new i = 0; i < g_iModelCount; i++)
+    {
+        if(!HasModelAccess(id, i) || !IsModelAllowedForTeam(i, team))
+        {
+            continue;
+        }
+
+        menu_additem(menu, g_szModelName[i], g_szModelFile[i]);
+        availableCount++;
+    }
+
+    if(availableCount > 0)
+    {
         menu_additem(menu, "\rСбросить модель", "reset");
+    }
 
     menu_display(id, menu);
 
-    remove_task(id + TASK_MENU);
-    set_task(10.0, "Task_CloseMenu", id + TASK_MENU);
+    remove_task(id + TASKID_MENU);
+    if(availableCount > 0)
+    {
+        set_task(10.0, "TaskCloseMenu", id + TASKID_MENU);
+    }
 }
 
-public MenuHandler(id, menu, item)
+public ModelsMenuHandler(id, menu, item)
 {
     if(item == MENU_EXIT)
     {
@@ -193,66 +207,176 @@ public MenuHandler(id, menu, item)
         return PLUGIN_HANDLED;
     }
 
-    new data[64], name[64];
-    menu_item_getinfo(menu, item, _, data, charsmax(data), name, charsmax(name));
+    new itemData[MAX_FILE], itemName[MAX_NAME], callback;
+    menu_item_getinfo(menu, item, _, itemData, charsmax(itemData), itemName, charsmax(itemName), callback);
 
-    if(equal(data, "reset"))
+    if(equal(itemData, "reset"))
     {
         rg_reset_user_model(id);
+        g_szPlayerModelName[id][0] = '^0';
+        g_szPlayerModelFile[id][0] = '^0';
+        client_printc(id, "\g%L \d%L", id, "MS_MODEL_ATTENTION", id, "MS_MODEL_MENU_RESET_MODEL");
     }
     else
     {
-        rg_set_user_model(id, data);
-        copy(g_PlayerModelFile[id], charsmax(g_PlayerModelFile[]), data);
-        copy(g_PlayerModelName[id], charsmax(g_PlayerModelName[]), name);
+        rg_set_user_model(id, itemData);
+        copy(g_szPlayerModelFile[id], charsmax(g_szPlayerModelFile[]), itemData);
+        copy(g_szPlayerModelName[id], charsmax(g_szPlayerModelName[]), itemName);
+        client_printc(id, "\g%L \d%L \g%s", id, "MS_MODEL_ATTENTION", id, "MS_MODEL_PLAYER_SET_MODEL", g_szPlayerModelName[id]);
     }
-
-    client_printc(id, "\gМодель установлена: \t%s", name);
 
     CleanupMenu(id, menu);
     return PLUGIN_HANDLED;
 }
 
+public TaskCloseMenu(taskid)
+{
+    new id = taskid - TASKID_MENU;
+    if(is_user_connected(id))
+    {
+        show_menu(id, 0, "^n", 1);
+    }
+}
+
 CleanupMenu(id, menu)
 {
-    remove_task(id + TASK_MENU);
+    remove_task(id + TASKID_MENU);
     menu_destroy(menu);
 }
 
-public Task_CloseMenu(taskid)
+LoadModels()
 {
-    new id = taskid - TASK_MENU;
-    if(is_user_connected(id)) show_menu(id, 0, "^n", 1);
+    new cfgPath[MAX_PATH];
+    get_configsdir(cfgPath, charsmax(cfgPath));
+    format(cfgPath, charsmax(cfgPath), "%s/%s", cfgPath, SETTINGS_FILE);
+
+    if(!file_exists(cfgPath))
+    {
+        log_amx("[MS MODELS] Не найден файл %s", cfgPath);
+        return;
+    }
+
+    new fp = fopen(cfgPath, "r");
+    if(!fp)
+    {
+        log_amx("[MS MODELS] Не удалось открыть %s", cfgPath);
+        return;
+    }
+
+    new line[512], name[MAX_NAME], file[MAX_FILE], team[MAX_TEAM], access[MAX_ACCESS];
+
+    while(!feof(fp))
+    {
+        fgets(fp, line, charsmax(line));
+        trim(line);
+
+        if(!line[0] || line[0] == ';' || line[0] == '#')
+        {
+            continue;
+        }
+
+        if(g_iModelCount >= MAX_MODELS)
+        {
+            log_amx("[MS MODELS] Достигнут лимит моделей: %d", MAX_MODELS);
+            break;
+        }
+
+        name[0] = '^0';
+        file[0] = '^0';
+        team[0] = '^0';
+        access[0] = '^0';
+
+        if(parse(line, name, charsmax(name), file, charsmax(file), team, charsmax(team), access, charsmax(access)) < 2)
+        {
+            continue;
+        }
+
+        new fileNoExt[MAX_FILE];
+        copyc(fileNoExt, charsmax(fileNoExt), file, '.');
+
+        format(g_szModelPath[g_iModelCount], charsmax(g_szModelPath[]), "models/player/%s/%s.mdl", fileNoExt, fileNoExt);
+
+        if(!file_exists(g_szModelPath[g_iModelCount]))
+        {
+            log_amx("[MS MODELS] Файл модели не найден: %s", g_szModelPath[g_iModelCount]);
+            continue;
+        }
+
+        copy(g_szModelName[g_iModelCount], charsmax(g_szModelName[]), name);
+        copy(g_szModelFile[g_iModelCount], charsmax(g_szModelFile[]), fileNoExt);
+
+        strtoupper(team);
+        copy(g_szModelTeam[g_iModelCount], charsmax(g_szModelTeam[]), team);
+
+        copy(g_szModelAccess[g_iModelCount], charsmax(g_szModelAccess[]), access);
+
+        precache_model(g_szModelPath[g_iModelCount]);
+
+        g_iModelCount++;
+    }
+
+    fclose(fp);
+    log_amx("[MS MODELS] Загружено моделей: %d", g_iModelCount);
 }
 
-public client_disconnected(id)
+bool:HasModelAccess(id, modelIndex)
 {
-    remove_task(id + TASK_MENU);
+    if(!g_szModelAccess[modelIndex][0])
+    {
+        return true;
+    }
+
+    return (get_user_flags(id) & read_flags(g_szModelAccess[modelIndex])) != 0;
 }
 
-public HC_PlayerSpawn(id)
+bool:IsModelAllowedForTeam(modelIndex, TeamName:team)
 {
-    if(!is_user_alive(id)) return;
-    rg_reset_user_model(id);
+    if(equal(g_szModelTeam[modelIndex], "ANY"))
+    {
+        return true;
+    }
+
+    if(team == TEAM_CT)
+    {
+        return equal(g_szModelTeam[modelIndex], "CT") != 0;
+    }
+
+    if(team == TEAM_TERRORIST)
+    {
+        return equal(g_szModelTeam[modelIndex], "T") != 0;
+    }
+
+    return false;
 }
 
-public HC_ChangeTeam(const id, const TeamName:iTeam, bool:bForce)
+bool:IsPlayableTeam(TeamName:team)
 {
-    if(!is_user_connected(id)) return HC_CONTINUE;
-    rg_reset_user_model(id);
-    return HC_CONTINUE;
+    return (team == TEAM_TERRORIST || team == TEAM_CT);
 }
 
-stock client_printc(id, const text[], any:...)
+ResetPlayerState(id)
 {
+    g_szPlayerModelName[id][0] = '^0';
+    g_szPlayerModelFile[id][0] = '^0';
+    g_bPlayerMinModelsBlocked[id] = false;
+    g_bMenuShownOnce[id] = false;
+}
+
+stock client_printc(const id, const text[], any:...)
+{
+    if(!is_user_connected(id))
+    {
+        return;
+    }
+
     new msg[192];
     vformat(msg, charsmax(msg), text, 3);
 
-    replace_all(msg, charsmax(msg), "\\g", "^x04");
-    replace_all(msg, charsmax(msg), "\\t", "^x03");
-    replace_all(msg, charsmax(msg), "\\d", "^x01");
+    replace_all(msg, charsmax(msg), "\g", "^x04");
+    replace_all(msg, charsmax(msg), "\t", "^x03");
+    replace_all(msg, charsmax(msg), "\d", "^x01");
 
-    message_begin(MSG_ONE, g_msgSayText, _, id);
+    message_begin(MSG_ONE_UNRELIABLE, g_iMsgSayText, _, id);
     write_byte(id);
     write_string(msg);
     message_end();
