@@ -23,6 +23,15 @@
 
 new const SETTINGS_FILE[] = "ms_models.ini";				//	Файл со списком моделей
 new g_pCvarSettingsFilePath;									//	Путь к файлу с моделями
+
+EnsureSettingsPathCvarRegistered()
+{
+	if(!g_pCvarSettingsFilePath)
+	{
+		g_pCvarSettingsFilePath = register_cvar("ms_models_ini_path", SETTINGS_FILE);
+	}
+}
+
 new g_sSettingsFilePath[MAX_MODEL_PATH];						//	Текущий путь к файлу с моделями
 
 new g_iLoadModelCount;										//	Количество загруженных моделей
@@ -50,7 +59,7 @@ public plugin_init()
 	register_clcmd ( "say_team /model" , "Create_Model_Menu" , ADMIN_ALL , "- Показать меню моделей" );
 	register_clcmd ( "say_team /models" , "Create_Model_Menu" , ADMIN_ALL , "- Показать меню моделей" );
 	register_concmd ("ms_models", "Create_Model_Menu", ADMIN_ALL);
-	g_pCvarSettingsFilePath = register_cvar("ms_models_ini_path", SETTINGS_FILE);
+	EnsureSettingsPathCvarRegistered();
 	
 	//РЕГИСТРАЦИЯ СОБЫТИЙ   
 	register_event("TextMsg", "player_change_team", "a", "1=1", "2&Game_join_terrorist", "2&Game_join_ct", "2&Game_join_terrorist_auto", "2&Game_join_ct_auto"); //Регистрируем событие Смена Команды
@@ -65,6 +74,7 @@ public plugin_init()
 // ------------------------------------------------------------------------------------------
 public plugin_precache()
 {
+	EnsureSettingsPathCvarRegistered();
 
     // Загрузка моделей
 	
