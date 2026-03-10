@@ -407,6 +407,9 @@ public OnPlayerTeamInfo()
 
 	if(g_iLastTeam[id] != iUserTeam)
 	{
+		rg_reset_user_model(id);
+		UpdateCurrentModelData(id);
+
 		g_iLastTeam[id] = iUserTeam;
 		g_bMenuShownForTeam[id] = false;
 	}
