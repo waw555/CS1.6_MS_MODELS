@@ -271,7 +271,7 @@ bool:IsModelAvailableForPlayer(modelIndex, iUserFlags, TeamName:iUserTeam)
 	return true;
 }
 
-GetVisibleModelCount(id, iUserFlags, TeamName:iUserTeam)
+GetVisibleModelCount(iUserFlags, TeamName:iUserTeam)
 {
 	new iCount;
 
@@ -286,7 +286,7 @@ GetVisibleModelCount(id, iUserFlags, TeamName:iUserTeam)
 	return iCount;
 }
 
-GetModelIndexByVisiblePosition(id, visiblePosition, iUserFlags, TeamName:iUserTeam)
+GetModelIndexByVisiblePosition(visiblePosition, iUserFlags, TeamName:iUserTeam)
 {
 	new iCurrentPos;
 
@@ -325,7 +325,7 @@ show_models_menu(id, bool:bPlaySound)
 		return;
 	}
 
-	new iVisibleModels = GetVisibleModelCount(id, iUserFlags, iUserTeam);
+	new iVisibleModels = GetVisibleModelCount(iUserFlags, iUserTeam);
 	new iMaxPage = iVisibleModels > 0 ? (iVisibleModels - 1) / MODELS_PER_PAGE : 0;
 
 	if(g_iMenuPage[id] > iMaxPage)
@@ -343,7 +343,7 @@ show_models_menu(id, bool:bPlaySound)
 	new startPos = g_iMenuPage[id] * MODELS_PER_PAGE;
 	for(new i = 0; i < MODELS_PER_PAGE; i++)
 	{
-		new modelIndex = GetModelIndexByVisiblePosition(id, startPos + i, iUserFlags, iUserTeam);
+		new modelIndex = GetModelIndexByVisiblePosition(startPos + i, iUserFlags, iUserTeam);
 
 		if(modelIndex == -1)
 		{
@@ -417,7 +417,7 @@ public ModelMenu_handler(id, key)
 	{
 		case 0..5:
 		{
-			new modelIndex = GetModelIndexByVisiblePosition(id, (g_iMenuPage[id] * MODELS_PER_PAGE) + key, iUserFlags, iUserTeam);
+			new modelIndex = GetModelIndexByVisiblePosition((g_iMenuPage[id] * MODELS_PER_PAGE) + key, iUserFlags, iUserTeam);
 			if(modelIndex == -1)
 			{
 				show_models_menu(id, false);
@@ -445,7 +445,7 @@ public ModelMenu_handler(id, key)
 
 		case 7:
 		{
-			new iVisibleModels = GetVisibleModelCount(id, iUserFlags, iUserTeam);
+			new iVisibleModels = GetVisibleModelCount(iUserFlags, iUserTeam);
 			new iMaxPage = iVisibleModels > 0 ? (iVisibleModels - 1) / MODELS_PER_PAGE : 0;
 
 			if(g_iMenuPage[id] < iMaxPage)
