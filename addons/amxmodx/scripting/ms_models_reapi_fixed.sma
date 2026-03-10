@@ -15,6 +15,9 @@
 
 #define SETTINGS_FILE "ms_models.ini"
 
+new g_pCvarSettingsFilePath;
+new g_szSettingsFilePath[MAX_PATH];
+
 #define MAX_MODELS 128
 #define MAX_NAME   128
 #define MAX_FILE   128
@@ -51,6 +54,8 @@ public plugin_init()
     register_clcmd("say_team /model", "CmdOpenMenu");
     register_clcmd("say_team /models", "CmdOpenMenu");
     register_concmd("ms_models", "CmdOpenMenu", ADMIN_ALL);
+
+    g_pCvarSettingsFilePath = register_cvar("ms_models_ini_path", SETTINGS_FILE);
 
     RegisterHookChain(RG_CBasePlayer_Spawn, "OnPlayerSpawn_Post", true);
     register_event("TeamInfo", "OnTeamInfo", "a");
@@ -263,20 +268,35 @@ CleanupMenu(id, menu)
 
 LoadModels()
 {
-    new cfgPath[MAX_PATH];
-    get_configsdir(cfgPath, charsmax(cfgPath));
-    format(cfgPath, charsmax(cfgPath), "%s/%s", cfgPath, SETTINGS_FILE);
+    new configsDir[MAX_PATH], configuredPath[MAX_PATH];
+    get_configsdir(configsDir, charsmax(configsDir));
+    get_pcvar_string(g_pCvarSettingsFilePath, configuredPath, charsmax(configuredPath));
+    trim(configuredPath);
 
-    if(!file_exists(cfgPath))
+    if(!configuredPath[0])
     {
-        log_amx("[MS MODELS] Не найден файл %s", cfgPath);
+        copy(configuredPath, charsmax(configuredPath), SETTINGS_FILE);
+    }
+
+    if(containi(configuredPath, "/") != -1 || containi(configuredPath, "\\") != -1)
+    {
+        copy(g_szSettingsFilePath, charsmax(g_szSettingsFilePath), configuredPath);
+    }
+    else
+    {
+        format(g_szSettingsFilePath, charsmax(g_szSettingsFilePath), "%s/%s", configsDir, configuredPath);
+    }
+
+    if(!file_exists(g_szSettingsFilePath))
+    {
+        log_amx("[MS MODELS] Не найден файл %s", g_szSettingsFilePath);
         return;
     }
 
-    new fp = fopen(cfgPath, "r");
+    new fp = fopen(g_szSettingsFilePath, "r");
     if(!fp)
     {
-        log_amx("[MS MODELS] Не удалось открыть %s", cfgPath);
+        log_amx("[MS MODELS] Не удалось открыть %s", g_szSettingsFilePath);
         return;
     }
 
