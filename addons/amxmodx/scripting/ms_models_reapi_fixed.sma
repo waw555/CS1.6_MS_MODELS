@@ -36,6 +36,7 @@ new g_szPlayerModelName[MAX_PLAYERS + 1][MAX_NAME];
 new g_szPlayerModelFile[MAX_PLAYERS + 1][MAX_FILE];
 new bool:g_bPlayerMinModelsBlocked[MAX_PLAYERS + 1];
 new bool:g_bMenuShownOnce[MAX_PLAYERS + 1];
+new TeamName:g_iLastPlayerTeam[MAX_PLAYERS + 1];
 
 new g_iMsgSayText;
 
@@ -148,7 +149,10 @@ public OnTeamInfo()
         iTeam = TEAM_TERRORIST;
     }
 
-    if(!IsPlayableTeam(iTeam))
+    new TeamName:iPrevTeam = g_iLastPlayerTeam[id];
+    g_iLastPlayerTeam[id] = iTeam;
+
+    if(iPrevTeam == iTeam || !IsPlayableTeam(iTeam))
     {
         return;
     }
@@ -373,6 +377,7 @@ ResetPlayerState(id)
     g_szPlayerModelFile[id][0] = '^0';
     g_bPlayerMinModelsBlocked[id] = false;
     g_bMenuShownOnce[id] = false;
+    g_iLastPlayerTeam[id] = TEAM_UNASSIGNED;
 }
 
 stock client_printc(const id, const text[], any:...)
