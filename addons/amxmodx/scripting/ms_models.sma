@@ -321,7 +321,7 @@ public ModelMenu_handler(id, ModelMenu, item)
 		rg_reset_user_model(id);
 		
 		new s_ModelFile[MAX_MODEL_FILE];
-		rg_get_user_model(id, s_ModelFile, charsmax(s_ModelFile));	//	Получаем текущую модель игрока
+		get_user_info(id, "model", s_ModelFile, charsmax(s_ModelFile));	//	Получаем текущую модель игрока
 		g_sCurrentModelFile[id] = s_ModelFile;
 		g_sCurrentModelName[id] = s_ModelFile;
 		client_printc(id, "\g%L \d%L \g%s", id, "MS_MODEL_ATTENTION",id, "MS_MODEL_PLAYER_SET_MODEL", g_sCurrentModelName[id]);
@@ -356,7 +356,7 @@ public OnPlayerSpawn_Post(const id)
 	rg_reset_user_model(id);
 
 	new s_ModelFile[MAX_MODEL_FILE];
-	rg_get_user_model(id, s_ModelFile, charsmax(s_ModelFile));
+	get_user_info(id, "model", s_ModelFile, charsmax(s_ModelFile));
 	g_sCurrentModelFile[id] = s_ModelFile;
 	g_sCurrentModelName[id] = s_ModelFile;
 
