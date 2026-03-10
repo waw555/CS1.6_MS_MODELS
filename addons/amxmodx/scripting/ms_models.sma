@@ -253,7 +253,7 @@ public Create_Model_Menu(id)
 		new TeamName:iUserTeam = get_member(id, m_iTeam);
 		new sResetMenuItem[MAX_PARSE_TEXT];
 
-		formatex(sResetMenuItem, charsmax(sResetMenuItem), "%L", id, "MS_MODEL_MENU_RESET_MODEL");
+		formatex(sResetMenuItem, charsmax(sResetMenuItem), "^n%L", id, "MS_MODEL_MENU_RESET_MODEL");
 
 		if (iUserTeam == TEAM_SPECTATOR)	//	Команда Наблюдатель
 		{
@@ -295,18 +295,12 @@ public Create_Model_Menu(id)
 			}
 		}
 
-		if(iUserModelCount)
-		{
-			if(iModelsOnPage > 0)
+			if(iUserModelCount)
 			{
-				while(iModelsOnPage < MODELS_PER_PAGE)
+				if(iModelsOnPage > 0)
 				{
-					menu_additem(ModelMenu, "\\d-", "blank");
-					iModelsOnPage++;
+					menu_additem(ModelMenu, sResetMenuItem, "reset");
 				}
-
-				menu_additem(ModelMenu, sResetMenuItem, "reset");
-			}
 
 			client_cmd(id, "spk sound/events/tutor_msg.wav");
 		}
