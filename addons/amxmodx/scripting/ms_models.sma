@@ -246,6 +246,7 @@ public Create_Model_Menu(id)
 		formatex(sMenuName, charsmax(sMenuName), "\w%L \r%s ^n^n\y%L", LANG_PLAYER, "MS_MODEL_CURRENT_MODEL_NAME", sCurrentModelName, LANG_PLAYER, "MS_MODEL_MENU_NAME");	//	Текущая модель игрока и заголовок меню
 		
 		new ModelMenu = menu_create(sMenuName, "ModelMenu_handler");
+		new iBlankItemCallback = menu_makecallback("MenuBlankItemCallback");
 		new iUserModelCount = 0;
 		new iUserFlags = get_user_flags(id);
 		new TeamName:iUserTeam = get_member(id, m_iTeam);
@@ -286,6 +287,12 @@ public Create_Model_Menu(id)
 
 		if(iUserModelCount)
 		{
+			new iBlankItemCount = (6 - (iUserModelCount % 7) + 7) % 7;
+			for(new i = 0; i < iBlankItemCount; i++)
+			{
+				menu_additem(ModelMenu, " ", "empty", 0, iBlankItemCallback);
+			}
+
 			formatex(sMenuName, charsmax(sMenuName), "%L", id, "MS_MODEL_MENU_RESET_MODEL");
 			menu_additem(ModelMenu, sMenuName, "reset");
 			client_cmd(id, "spk sound/events/tutor_msg.wav");
@@ -308,6 +315,11 @@ public Create_Model_Menu(id)
 		client_printc(id, "\gДля доступа к моделям, необходимо изменить cvar cl_minmodels на 0");
 	}
 	return PLUGIN_HANDLED;
+}
+
+public MenuBlankItemCallback(id, menu, item)
+{
+	return ITEM_DISABLED;
 }
 
 UpdateCurrentModelData(id)
