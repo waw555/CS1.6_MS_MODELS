@@ -15,15 +15,15 @@
 
 #define SETTINGS_FILE "ms_models.ini"
 
-new g_pCvarSettingsFilePath;
-new g_szSettingsFilePath[MAX_PATH];
-
+#define MAX_PATH   256
 #define MAX_MODELS 128
 #define MAX_NAME   128
 #define MAX_FILE   128
 #define MAX_TEAM   4
 #define MAX_ACCESS 32
-#define MAX_PATH   256
+
+new g_pCvarSettingsFilePath;
+new g_szSettingsFilePath[MAX_PATH];
 
 #define TASKID_MENU 5987
 
