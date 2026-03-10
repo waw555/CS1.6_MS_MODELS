@@ -17,7 +17,7 @@
 #define MAX_MODEL_TEAM 5	//	Максимальное количество символов в названии команды (Пример: CT, T, ANY)
 #define MAX_MODEL_ACCESS 32	//	Максимальное количество символов в правах доступа к модели (Пример: abcd или ghtuvz или a)
 #define MAX_MODEL_PATH 256	//	Максимальная длина пути к файлу модели
-#define MAX_PLAYER 32		//	Максимальное количество игроков
+#define MAX_PLAYERS 32		//	Максимальное количество игроков
 
 #pragma semicolon 1
 
@@ -31,10 +31,10 @@ new g_aModelFile[MAX_MODEL_COUNT][MAX_MODEL_FILE];			//	Имя файла мод
 new g_aModelTeam[MAX_MODEL_COUNT][MAX_MODEL_TEAM];			//	Команда для которой доступна модель: CT или T или ANY
 new g_aModelAccess[MAX_MODEL_COUNT][MAX_MODEL_ACCESS];		//	Уровень доступа к модели (Флаги)
 new g_aModelPath[MAX_MODEL_COUNT][MAX_MODEL_PATH];			//	Полный путь к модели /models/player/название папки как название файла/файл модели с расширением .mdl
-new g_sCurrentModelName[MAX_PLAYER][MAX_MODEL_NAME];		//	Название текущей модели игрока
-new g_sCurrentModelFile[MAX_PLAYER][MAX_MODEL_FILE];		//	Имя файла текущей модели игрока
+new g_sCurrentModelName[MAX_PLAYERS + 1][MAX_MODEL_NAME];		//	Название текущей модели игрока
+new g_sCurrentModelFile[MAX_PLAYERS + 1][MAX_MODEL_FILE];		//	Имя файла текущей модели игрока
 new g_i_MessageIDSayText; 									// 	Функция цветного чата
-new g_b_User_Cvar_Minmodel_Enable[MAX_PLAYER] = false;		//	Включены модели пользователя или нет
+new g_b_User_Cvar_Minmodel_Enable[MAX_PLAYERS + 1] = false;		//	Включены модели пользователя или нет
 
 // ------------------------------------------------------------------------------------------
 // --ИНИЦИАЛИЗАЦИЯ ПЛАГИНА-------------------------------------------------------------------
@@ -164,6 +164,12 @@ loadSettings(szFilename[])
 			//	Проверяем наличие файла в папке
 			if(file_exists(sModelPath))	// Если файл существует, добавляем в массив
 			{
+				if(g_iLoadModelCount >= MAX_MODEL_COUNT)
+				{
+					log_amx("Превышен лимит моделей (%d). Дальнейшая загрузка остановлена.", MAX_MODEL_COUNT);
+					break;
+				}
+
 				g_aModelName[g_iLoadModelCount] = sModelName;			//	Название модели для меню
 				g_aModelPath[g_iLoadModelCount] = sModelPath; 			//	Путь к файлу модели
 				g_aModelFile[g_iLoadModelCount] = sModelFileName;		//	Имя файла модели без расширения
@@ -204,42 +210,36 @@ public Create_Model_Menu(id)
 	
 	if(!g_b_User_Cvar_Minmodel_Enable[id]){
 	
-		strtoupper(g_sCurrentModelName[id]);	//	Переводим имя модели в верхний регистр
+		new sCurrentModelName[MAX_MODEL_NAME];
+		copy(sCurrentModelName, charsmax(sCurrentModelName), g_sCurrentModelName[id]);
+		strtoupper(sCurrentModelName);	//	Переводим имя модели в верхний регистр
 		new sMenuName[MAX_PARSE_TEXT];
-		formatex(sMenuName, charsmax(sMenuName), "\w%L \r%s ^n^n\y%L", LANG_PLAYER, "MS_MODEL_CURRENT_MODEL_NAME", g_sCurrentModelName[id], LANG_PLAYER, "MS_MODEL_MENU_NAME");	//	Текущая модель игрока и заголовок меню
+		formatex(sMenuName, charsmax(sMenuName), "\w%L \r%s ^n^n\y%L", LANG_PLAYER, "MS_MODEL_CURRENT_MODEL_NAME", sCurrentModelName, LANG_PLAYER, "MS_MODEL_MENU_NAME");	//	Текущая модель игрока и заголовок меню
 		
 		new ModelMenu = menu_create(sMenuName, "ModelMenu_handler");
 		new iUserModelCount = 0;
+		new iUserFlags = get_user_flags(id);
+		new iUserTeam = get_user_team(id);
 	
-		if (get_user_team(id) == 1)	//	Команда Террористы
+		if (iUserTeam == 1)	//	Команда Террористы
 		{
 			for(new i=0; i < g_iLoadModelCount; i++)
 			{			
-				if((equal(g_aModelTeam[i], "T") || equal(g_aModelTeam[i], "ANY")) && (get_user_flags(id) & read_flags(g_aModelAccess[i])))	//	Если команда модели T или ANY и у пользователя есть соответствующий флаг в правах доступа.
+				if((equal(g_aModelTeam[i], "T") || equal(g_aModelTeam[i], "ANY")) && (iUserFlags & read_flags(g_aModelAccess[i])))	//	Если команда модели T или ANY и у пользователя есть соответствующий флаг в правах доступа.
 				{
 					menu_additem(ModelMenu, g_aModelName[i], g_aModelFile[i]);
 					iUserModelCount++;
-				}else if(i==g_iLoadModelCount && iUserModelCount){
-					// Если модели закончились, добавить кнопку сброса
-					formatex(sMenuName, charsmax(sMenuName), "%L", id, "MS_MODEL_MENU_RESET_MODEL");
-					menu_additem(ModelMenu, sMenuName, "reset");
-					client_cmd(id, "spk sound/events/tutor_msg.wav");
 				}
 			}
 		} 
-		else if (get_user_team(id) == 2)	//	Команда Контр-Террористы
+		else if (iUserTeam == 2)	//	Команда Контр-Террористы
 		{
-			for(new i=0; i <= g_iLoadModelCount; i++)
+			for(new i=0; i < g_iLoadModelCount; i++)
 			{			
-				if((equal(g_aModelTeam[i], "CT") || equal(g_aModelTeam[i], "ANY")) && (get_user_flags(id) & read_flags(g_aModelAccess[i])))	//	Если команда модели CT или ANY и у пользователя есть соответствующий флаг в правах доступа.
+				if((equal(g_aModelTeam[i], "CT") || equal(g_aModelTeam[i], "ANY")) && (iUserFlags & read_flags(g_aModelAccess[i])))	//	Если команда модели CT или ANY и у пользователя есть соответствующий флаг в правах доступа.
 				{
 					menu_additem(ModelMenu, g_aModelName[i], g_aModelFile[i]);
 					iUserModelCount++;
-				}else if(i==g_iLoadModelCount && iUserModelCount){
-					// Если модели закончились, добавить кнопку сброса
-					formatex(sMenuName, charsmax(sMenuName), "%L", id, "MS_MODEL_MENU_RESET_MODEL");
-					menu_additem(ModelMenu, sMenuName, "reset");
-					client_cmd(id, "spk sound/events/tutor_msg.wav");
 				}
 			}
 		} 
@@ -253,6 +253,13 @@ public Create_Model_Menu(id)
 		{
 			log_amx("Команда игрока еще не выбрана");
 			return PLUGIN_HANDLED;
+		}
+
+		if(iUserModelCount)
+		{
+			formatex(sMenuName, charsmax(sMenuName), "%L", id, "MS_MODEL_MENU_RESET_MODEL");
+			menu_additem(ModelMenu, sMenuName, "reset");
+			client_cmd(id, "spk sound/events/tutor_msg.wav");
 		}
 
 		formatex(sMenuName, charsmax(sMenuName), "%L", id, "MS_MODEL_MENU_BACK");
@@ -349,10 +356,14 @@ public player_chose_class(id)
 public player_change_team()
 {
 	
-	new s_Name[64], index, id; // Имя игрока, Ник игрока и ID игрока
+	new s_Name[64], id; // Имя игрока и ID игрока
 	read_data(3, s_Name, charsmax(s_Name)); //Считываем данные игрока
-	index = get_user_index(s_Name); // получаем индекс игрока
-	id = get_user_userid(index);	//получаем id игрока
+	id = get_user_index(s_Name); // получаем индекс игрока
+
+	if(!id)
+	{
+		return;
+	}
 	
 	if(is_user_connected(id) && !is_user_bot(id))	//	Если игрок подключен и не бот
 	{
@@ -379,7 +390,7 @@ public player_cancel_menu(task_id)
 stock client_printc(id, const text[], any:...)
 {
 	
-	new szMsg[MAX_MODEL_NAME], iPlayers[MAX_PLAYER], iCount = 1;
+	new szMsg[MAX_MODEL_NAME], iPlayers[MAX_PLAYERS], iCount = 1;
 	vformat(szMsg, charsmax(szMsg), text, 3);
 	
 	replace_all(szMsg, charsmax(szMsg), "\g","^x04");										//	Зеленый цвет
