@@ -44,6 +44,8 @@ new g_sCurrentModelName[MAX_PLAYERS + 1][MAX_MODEL_NAME];		//	Название �
 new g_sCurrentModelFile[MAX_PLAYERS + 1][MAX_MODEL_FILE];		//	Имя файла текущей модели игрока
 new g_i_MessageIDSayText; 									// 	Функция цветного чата
 new g_b_User_Cvar_Minmodel_Enable[MAX_PLAYERS + 1] = false;		//	Включены модели пользователя или нет
+new TeamName:g_iLastTeam[MAX_PLAYERS + 1];
+new bool:g_bMenuShownForTeam[MAX_PLAYERS + 1];
 
 // ------------------------------------------------------------------------------------------
 // --ИНИЦИАЛИЗАЦИЯ ПЛАГИНА-------------------------------------------------------------------
@@ -62,10 +64,27 @@ public plugin_init()
 	EnsureSettingsPathCvarRegistered();
 	
 	// ReAPI: используем хук спавна вместо TextMsg/joinclass.
-	RegisterHookChain(RG_CBasePlayer_Spawn, "OnPlayerSpawn_Post", true);
+	register_event("TeamInfo", "OnPlayerTeamInfo", "a");
 	
 	
 	g_i_MessageIDSayText = get_user_msgid("SayText");								//	Функция цветного чата
+}
+
+public client_putinserver(id)
+{
+	g_iLastTeam[id] = TEAM_UNASSIGNED;
+	g_bMenuShownForTeam[id] = false;
+
+	UpdateCurrentModelData(id);
+}
+
+public client_disconnected(id)
+{
+	g_iLastTeam[id] = TEAM_UNASSIGNED;
+	g_bMenuShownForTeam[id] = false;
+
+	remove_task(id);
+	remove_task(id + 5987);
 }
 
 // ------------------------------------------------------------------------------------------
@@ -216,7 +235,8 @@ public Create_Model_Menu(id)
 	}
 	
 	query_client_cvar(id, "cl_minmodels", "cvar_query_callback");
-	
+	UpdateCurrentModelData(id);
+
 	if(!g_b_User_Cvar_Minmodel_Enable[id]){
 	
 		new sCurrentModelName[MAX_MODEL_NAME];
@@ -290,6 +310,29 @@ public Create_Model_Menu(id)
 	return PLUGIN_HANDLED;
 }
 
+UpdateCurrentModelData(id)
+{
+	if(!is_user_connected(id))
+	{
+		return;
+	}
+
+	new sModelFile[MAX_MODEL_FILE];
+	get_user_info(id, "model", sModelFile, charsmax(sModelFile));
+
+	g_sCurrentModelFile[id] = sModelFile;
+	g_sCurrentModelName[id] = sModelFile;
+
+	for(new i = 0; i < g_iLoadModelCount; i++)
+	{
+		if(equal(g_aModelFile[i], sModelFile))
+		{
+			g_sCurrentModelName[id] = g_aModelName[i];
+			break;
+		}
+	}
+}
+
 public cvar_query_callback(id, const cvar[], const value[])
 {
 	if(equali(value, "Bad CVAR request")){
@@ -345,26 +388,37 @@ public menu_page_more_back(id)
 	client_cmd(id, "spk sound/events/tutor_msg.wav");
 }
 
-// ReAPI: обработка спавна игрока
-public OnPlayerSpawn_Post(const id)
+public OnPlayerTeamInfo()
 {
-	if(!is_user_connected(id) || is_user_bot(id) || !is_user_alive(id))
+	new id = read_data(1);
+
+	if(!is_user_connected(id) || is_user_bot(id))
 	{
-		return HC_CONTINUE;
+		return;
 	}
 
-	rg_reset_user_model(id);
+	new TeamName:iUserTeam = get_member(id, m_iTeam);
+	if(iUserTeam != TEAM_TERRORIST && iUserTeam != TEAM_CT)
+	{
+		g_iLastTeam[id] = iUserTeam;
+		g_bMenuShownForTeam[id] = false;
+		return;
+	}
 
-	new s_ModelFile[MAX_MODEL_FILE];
-	get_user_info(id, "model", s_ModelFile, charsmax(s_ModelFile));
-	g_sCurrentModelFile[id] = s_ModelFile;
-	g_sCurrentModelName[id] = s_ModelFile;
+	if(g_iLastTeam[id] != iUserTeam)
+	{
+		g_iLastTeam[id] = iUserTeam;
+		g_bMenuShownForTeam[id] = false;
+	}
 
-	query_client_cvar(id, "cl_minmodels", "cvar_query_callback");
+	if(g_bMenuShownForTeam[id])
+	{
+		return;
+	}
+
 	remove_task(id);
 	set_task(5.0, "Create_Model_Menu", id);
-
-	return HC_CONTINUE;
+	g_bMenuShownForTeam[id] = true;
 }
 //	Отмена меню
 public player_cancel_menu(task_id)
