@@ -47,6 +47,7 @@ new g_i_MessageIDSayText; 									// 	Функция цветного чата
 new g_b_User_Cvar_Minmodel_Enable[MAX_PLAYERS + 1] = false;		//	Включены модели пользователя или нет
 new TeamName:g_iLastTeam[MAX_PLAYERS + 1];
 new bool:g_bMenuShownForTeam[MAX_PLAYERS + 1];
+new g_iMenuPage[MAX_PLAYERS + 1];
 
 // ------------------------------------------------------------------------------------------
 // --ИНИЦИАЛИЗАЦИЯ ПЛАГИНА-------------------------------------------------------------------
@@ -62,6 +63,7 @@ public plugin_init()
 	register_clcmd ( "say_team /model" , "Create_Model_Menu" , ADMIN_ALL , "- Показать меню моделей" );
 	register_clcmd ( "say_team /models" , "Create_Model_Menu" , ADMIN_ALL , "- Показать меню моделей" );
 	register_concmd ("ms_models", "Create_Model_Menu", ADMIN_ALL);
+	register_menucmd(register_menuid("MSModelsMenu"), 1023, "ModelMenu_handler");
 	EnsureSettingsPathCvarRegistered();
 	
 	// ReAPI: используем хук спавна вместо TextMsg/joinclass.
@@ -77,6 +79,7 @@ public client_putinserver(id)
 	g_bMenuShownForTeam[id] = false;
 
 	UpdateCurrentModelData(id);
+	g_iMenuPage[id] = 0;
 }
 
 public client_disconnected(id)
@@ -86,6 +89,7 @@ public client_disconnected(id)
 
 	remove_task(id);
 	remove_task(id + 5987);
+	g_iMenuPage[id] = 0;
 }
 
 // ------------------------------------------------------------------------------------------
@@ -239,89 +243,130 @@ public Create_Model_Menu(id)
 	UpdateCurrentModelData(id);
 
 	if(!g_b_User_Cvar_Minmodel_Enable[id]){
-	
-		new sCurrentModelName[MAX_MODEL_NAME];
-		copy(sCurrentModelName, charsmax(sCurrentModelName), g_sCurrentModelName[id]);
-		strtoupper(sCurrentModelName);	//	Переводим имя модели в верхний регистр
-		new sMenuName[MAX_PARSE_TEXT];
-		formatex(sMenuName, charsmax(sMenuName), "\w%L \r%s ^n^n\y%L", LANG_PLAYER, "MS_MODEL_CURRENT_MODEL_NAME", sCurrentModelName, LANG_PLAYER, "MS_MODEL_MENU_NAME");	//	Текущая модель игрока и заголовок меню
-		
-		new ModelMenu = menu_create(sMenuName, "ModelMenu_handler");
-		new iUserModelCount = 0;
-		new iModelsOnPage = 0;
-		new iUserFlags = get_user_flags(id);
-		new TeamName:iUserTeam = get_member(id, m_iTeam);
-		new sResetMenuItem[MAX_PARSE_TEXT];
-
-		formatex(sResetMenuItem, charsmax(sResetMenuItem), "^n%L", id, "MS_MODEL_MENU_RESET_MODEL");
-
-		if (iUserTeam == TEAM_SPECTATOR)	//	Команда Наблюдатель
-		{
-			log_amx("Команда игрока Наблюдатель");
-			client_cmd(id, "spk sound/events/friend_died.wav");
-			return PLUGIN_HANDLED;
-		}
-		else if (iUserTeam != TEAM_TERRORIST && iUserTeam != TEAM_CT)
-		{
-			log_amx("Команда игрока еще не выбрана");
-			return PLUGIN_HANDLED;
-		}
-
-		for(new i = 0; i < g_iLoadModelCount; i++)
-		{
-			if(!(iUserFlags & read_flags(g_aModelAccess[i])))
-			{
-				continue;
-			}
-
-			if(iUserTeam == TEAM_TERRORIST && !(equal(g_aModelTeam[i], "T") || equal(g_aModelTeam[i], "ANY")))
-			{
-				continue;
-			}
-
-			if(iUserTeam == TEAM_CT && !(equal(g_aModelTeam[i], "CT") || equal(g_aModelTeam[i], "ANY")))
-			{
-				continue;
-			}
-
-			menu_additem(ModelMenu, g_aModelName[i], g_aModelFile[i]);
-			iUserModelCount++;
-			iModelsOnPage++;
-
-			if(iModelsOnPage == MODELS_PER_PAGE)
-			{
-				menu_additem(ModelMenu, sResetMenuItem, "reset");
-				iModelsOnPage = 0;
-			}
-		}
-
-		if(iUserModelCount)
-		{
-			if(iModelsOnPage > 0)
-			{
-				menu_additem(ModelMenu, sResetMenuItem, "reset");
-			}
-
-			client_cmd(id, "spk sound/events/tutor_msg.wav");
-		}
-
-		formatex(sMenuName, charsmax(sMenuName), "%L", id, "MS_MODEL_MENU_BACK");
-		menu_setprop(ModelMenu, MPROP_BACKNAME, sMenuName);
-		formatex(sMenuName, charsmax(sMenuName), "%L", id, "MS_MODEL_MENU_NEXT");
-		menu_setprop(ModelMenu, MPROP_NEXTNAME, sMenuName);
-		formatex(sMenuName, charsmax(sMenuName), "%L", id, "MS_MODEL_MENU_EXIT");
-		menu_setprop(ModelMenu, MPROP_EXITNAME, sMenuName);
-		menu_setprop(ModelMenu, MPROP_PAGE_CALLBACK, "menu_page_more_back");
-
-		menu_display(id, ModelMenu);
-		if(iUserModelCount)
-		{
-			set_task(10.0, "player_cancel_menu", id + 5987,_,_,"a", 1);	// Закрыть меню через 10 секунд
-		}
+		g_iMenuPage[id] = 0;
+		show_models_menu(id, true);
 	}else{
 		client_printc(id, "\gДля доступа к моделям, необходимо изменить cvar cl_minmodels на 0");
 	}
 	return PLUGIN_HANDLED;
+}
+
+bool:IsModelAvailableForPlayer(modelIndex, iUserFlags, TeamName:iUserTeam)
+{
+	if(!(iUserFlags & read_flags(g_aModelAccess[modelIndex])))
+	{
+		return false;
+	}
+
+	if(iUserTeam == TEAM_TERRORIST && !(equal(g_aModelTeam[modelIndex], "T") || equal(g_aModelTeam[modelIndex], "ANY")))
+	{
+		return false;
+	}
+
+	if(iUserTeam == TEAM_CT && !(equal(g_aModelTeam[modelIndex], "CT") || equal(g_aModelTeam[modelIndex], "ANY")))
+	{
+		return false;
+	}
+
+	return true;
+}
+
+GetVisibleModelCount(id, iUserFlags, TeamName:iUserTeam)
+{
+	new iCount;
+
+	for(new i = 0; i < g_iLoadModelCount; i++)
+	{
+		if(IsModelAvailableForPlayer(i, iUserFlags, iUserTeam))
+		{
+			iCount++;
+		}
+	}
+
+	return iCount;
+}
+
+GetModelIndexByVisiblePosition(id, visiblePosition, iUserFlags, TeamName:iUserTeam)
+{
+	new iCurrentPos;
+
+	for(new i = 0; i < g_iLoadModelCount; i++)
+	{
+		if(!IsModelAvailableForPlayer(i, iUserFlags, iUserTeam))
+		{
+			continue;
+		}
+
+		if(iCurrentPos == visiblePosition)
+		{
+			return i;
+		}
+
+		iCurrentPos++;
+	}
+
+	return -1;
+}
+
+show_models_menu(id, bool:bPlaySound)
+{
+	new iUserFlags = get_user_flags(id);
+	new TeamName:iUserTeam = get_member(id, m_iTeam);
+
+	if (iUserTeam == TEAM_SPECTATOR)
+	{
+		log_amx("Команда игрока Наблюдатель");
+		client_cmd(id, "spk sound/events/friend_died.wav");
+		return;
+	}
+	else if (iUserTeam != TEAM_TERRORIST && iUserTeam != TEAM_CT)
+	{
+		log_amx("Команда игрока еще не выбрана");
+		return;
+	}
+
+	new iVisibleModels = GetVisibleModelCount(id, iUserFlags, iUserTeam);
+	new iMaxPage = iVisibleModels > 0 ? (iVisibleModels - 1) / MODELS_PER_PAGE : 0;
+
+	if(g_iMenuPage[id] > iMaxPage)
+	{
+		g_iMenuPage[id] = iMaxPage;
+	}
+
+	new menu[MAX_PARSE_TEXT], len;
+	new sCurrentModelName[MAX_MODEL_NAME];
+	copy(sCurrentModelName, charsmax(sCurrentModelName), g_sCurrentModelName[id]);
+	strtoupper(sCurrentModelName);
+
+	len += formatex(menu[len], charsmax(menu) - len, "\w%L \r%s^n^n\y%L^n^n", id, "MS_MODEL_CURRENT_MODEL_NAME", sCurrentModelName, id, "MS_MODEL_MENU_NAME");
+
+	new startPos = g_iMenuPage[id] * MODELS_PER_PAGE;
+	for(new i = 0; i < MODELS_PER_PAGE; i++)
+	{
+		new modelIndex = GetModelIndexByVisiblePosition(id, startPos + i, iUserFlags, iUserTeam);
+
+		if(modelIndex == -1)
+		{
+			break;
+		}
+
+		len += formatex(menu[len], charsmax(menu) - len, "%d. %s^n", i + 1, g_aModelName[modelIndex]);
+	}
+
+	len += formatex(menu[len], charsmax(menu) - len, "^n7. \r%L^n^n", id, "MS_MODEL_MENU_RESET_MODEL");
+	len += formatex(menu[len], charsmax(menu) - len, "8. %s%L^n", (g_iMenuPage[id] < iMaxPage) ? "\w" : "\d", id, "MS_MODEL_MENU_NEXT");
+	len += formatex(menu[len], charsmax(menu) - len, "9. %s%L^n", (g_iMenuPage[id] > 0) ? "\w" : "\d", id, "MS_MODEL_MENU_BACK");
+	len += formatex(menu[len], charsmax(menu) - len, "0. \d%L", id, "MS_MODEL_MENU_EXIT");
+
+	show_menu(id, 1023, menu, -1, "MSModelsMenu");
+
+	if(bPlaySound)
+	{
+		client_cmd(id, "spk sound/events/tutor_msg.wav");
+	}
+
+	remove_task(id + 5987);
+	set_task(10.0, "player_cancel_menu", id + 5987, _, _, "a", 1);
 }
 
 
@@ -363,50 +408,83 @@ public cvar_query_callback(id, const cvar[], const value[])
 }
 
 //	Обработчик нажатий кнопок меню
-public ModelMenu_handler(id, ModelMenu, item)
+public ModelMenu_handler(id, key)
 {
-	if(item == MENU_EXIT) {
-		client_cmd(id, "spk sound/events/friend_died.wav");
-		remove_task(id+5987);
-		menu_destroy(ModelMenu);
-		return PLUGIN_HANDLED;
-	}		
-	
-	new sModelFile[MAX_MODEL_FILE], sModelName[MAX_MODEL_NAME], callback;
-	menu_item_getinfo(ModelMenu, item, _, sModelFile, charsmax(sModelFile), sModelName, charsmax(sModelName), callback);
-	if(equal(sModelFile, "blank"))
+	new iUserFlags = get_user_flags(id);
+	new TeamName:iUserTeam = get_member(id, m_iTeam);
+
+	switch(key)
 	{
-		return PLUGIN_HANDLED;
+		case 0..5:
+		{
+			new modelIndex = GetModelIndexByVisiblePosition(id, (g_iMenuPage[id] * MODELS_PER_PAGE) + key, iUserFlags, iUserTeam);
+			if(modelIndex == -1)
+			{
+				show_models_menu(id, false);
+				return PLUGIN_HANDLED;
+			}
+
+			remove_task(id + 5987);
+			g_sCurrentModelName[id] = g_aModelName[modelIndex];
+			g_sCurrentModelFile[id] = g_aModelFile[modelIndex];
+			rg_set_user_model(id, g_aModelFile[modelIndex], true);
+			client_printc(id, "\g%L \d%L \g%s", id, "MS_MODEL_ATTENTION", id, "MS_MODEL_PLAYER_SET_MODEL", g_sCurrentModelName[id]);
+			client_cmd(id, "spk sound/events/tutor_msg.wav");
+			return PLUGIN_HANDLED;
+		}
+
+		case 6:
+		{
+			remove_task(id + 5987);
+			rg_reset_user_model(id);
+			UpdateCurrentModelData(id);
+			client_printc(id, "\g%L \d%L \g%s", id, "MS_MODEL_ATTENTION", id, "MS_MODEL_PLAYER_SET_MODEL", g_sCurrentModelName[id]);
+			client_cmd(id, "spk sound/events/tutor_msg.wav");
+			return PLUGIN_HANDLED;
+		}
+
+		case 7:
+		{
+			new iVisibleModels = GetVisibleModelCount(id, iUserFlags, iUserTeam);
+			new iMaxPage = iVisibleModels > 0 ? (iVisibleModels - 1) / MODELS_PER_PAGE : 0;
+
+			if(g_iMenuPage[id] < iMaxPage)
+			{
+				g_iMenuPage[id]++;
+				show_models_menu(id, true);
+			}
+			else
+			{
+				show_models_menu(id, false);
+			}
+			return PLUGIN_HANDLED;
+		}
+
+		case 8:
+		{
+			if(g_iMenuPage[id] > 0)
+			{
+				g_iMenuPage[id]--;
+				show_models_menu(id, true);
+			}
+			else
+			{
+				show_models_menu(id, false);
+			}
+			return PLUGIN_HANDLED;
+		}
+
+		case 9:
+		{
+			remove_task(id + 5987);
+			client_cmd(id, "spk sound/events/friend_died.wav");
+			show_menu(id, 0, "^n", 1);
+			return PLUGIN_HANDLED;
+		}
 	}
 
-	if(equal(sModelFile, "reset"))
-	{
-		remove_task(id+5987);
-		rg_reset_user_model(id);
-		
-		new s_ModelFile[MAX_MODEL_FILE];
-		get_user_info(id, "model", s_ModelFile, charsmax(s_ModelFile));	//	Получаем текущую модель игрока
-		g_sCurrentModelFile[id] = s_ModelFile;
-		g_sCurrentModelName[id] = s_ModelFile;
-		client_printc(id, "\g%L \d%L \g%s", id, "MS_MODEL_ATTENTION",id, "MS_MODEL_PLAYER_SET_MODEL", g_sCurrentModelName[id]);
-		client_cmd(id, "spk sound/events/tutor_msg.wav");
-	}
-	else
-	{
-		remove_task(id+5987);
-		g_sCurrentModelName[id] = sModelName;
-		g_sCurrentModelFile[id] = sModelFile;
-		rg_set_user_model(id, sModelFile, true);
-		client_printc(id, "\g%L \d%L \g%s", id, "MS_MODEL_ATTENTION",id, "MS_MODEL_PLAYER_SET_MODEL", g_sCurrentModelName[id]);
-		client_cmd(id, "spk sound/events/tutor_msg.wav");
-	}
+	show_models_menu(id, false);
 	return PLUGIN_HANDLED;
-}
-
-//	Событие при нажатии кнопки назад и вперед
-public menu_page_more_back(id)
-{
-	client_cmd(id, "spk sound/events/tutor_msg.wav");
 }
 
 public OnPlayerTeamInfo()
