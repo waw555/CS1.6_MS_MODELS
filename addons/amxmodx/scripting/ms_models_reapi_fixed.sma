@@ -52,7 +52,7 @@ public plugin_init()
     register_concmd("ms_models", "CmdOpenMenu", ADMIN_ALL);
 
     RegisterHookChain(RG_CBasePlayer_Spawn, "OnPlayerSpawn_Post", true);
-    RegisterHookChain(RG_CBasePlayer_SetTeam, "OnPlayerSetTeam_Post", true);
+    register_event("TeamInfo", "OnTeamInfo", "a");
 
     g_iMsgSayText = get_user_msgid("SayText");
 }
@@ -126,16 +126,31 @@ public OnPlayerSpawn_Post(id)
     }
 }
 
-public OnPlayerSetTeam_Post(const id, const TeamName:iTeam, bool:bCheckIfPlayerAlive)
+public OnTeamInfo()
 {
+    new id = read_data(1);
+
     if(!is_user_connected(id))
     {
-        return HC_CONTINUE;
+        return;
+    }
+
+    new szTeam[2];
+    read_data(2, szTeam, charsmax(szTeam));
+
+    new TeamName:iTeam = TEAM_UNASSIGNED;
+    if(szTeam[0] == 'C')
+    {
+        iTeam = TEAM_CT;
+    }
+    else if(szTeam[0] == 'T')
+    {
+        iTeam = TEAM_TERRORIST;
     }
 
     if(!IsPlayableTeam(iTeam))
     {
-        return HC_CONTINUE;
+        return;
     }
 
     rg_reset_user_model(id);
@@ -144,8 +159,6 @@ public OnPlayerSetTeam_Post(const id, const TeamName:iTeam, bool:bCheckIfPlayerA
 
     remove_task(id);
     set_task(2.0, "TaskOpenMenu", id);
-
-    return HC_CONTINUE;
 }
 
 public TaskOpenMenu(id)
