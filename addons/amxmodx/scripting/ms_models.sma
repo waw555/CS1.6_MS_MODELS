@@ -18,6 +18,7 @@
 #define MAX_MODEL_ACCESS 32	//	Максимальное количество символов в правах доступа к модели (Пример: abcd или ghtuvz или a)
 #define MAX_MODEL_PATH 256	//	Максимальная длина пути к файлу модели
 #define MAX_PLAYERS 32		//	Максимальное количество игроков
+#define MODELS_PER_PAGE 6	//	Количество моделей на одной странице меню перед пунктом сброса
 
 #pragma semicolon 1
 
@@ -287,7 +288,7 @@ public Create_Model_Menu(id)
 			iUserModelCount++;
 			iModelsOnPage++;
 
-			if(iModelsOnPage == 6)
+			if(iModelsOnPage == MODELS_PER_PAGE)
 			{
 				menu_additem(ModelMenu, sResetMenuItem, "reset");
 				iModelsOnPage = 0;
@@ -298,6 +299,12 @@ public Create_Model_Menu(id)
 		{
 			if(iModelsOnPage > 0)
 			{
+				while(iModelsOnPage < MODELS_PER_PAGE)
+				{
+					menu_additem(ModelMenu, "\\d-", "blank");
+					iModelsOnPage++;
+				}
+
 				menu_additem(ModelMenu, sResetMenuItem, "reset");
 			}
 
@@ -373,6 +380,11 @@ public ModelMenu_handler(id, ModelMenu, item)
 	
 	new sModelFile[MAX_MODEL_FILE], sModelName[MAX_MODEL_NAME], callback;
 	menu_item_getinfo(ModelMenu, item, _, sModelFile, charsmax(sModelFile), sModelName, charsmax(sModelName), callback);
+	if(equal(sModelFile, "blank"))
+	{
+		return PLUGIN_HANDLED;
+	}
+
 	if(equal(sModelFile, "reset"))
 	{
 		remove_task(id+5987);
