@@ -391,27 +391,31 @@ public menu_page_more_back(id)
 public OnPlayerTeamInfo()
 {
 	new id = read_data(1);
+	new sTeamName[16];
+	read_data(2, sTeamName, charsmax(sTeamName));
+	new TeamName:iUserTeam = TeamNameFromInfo(sTeamName);
 
 	if(!is_user_connected(id) || is_user_bot(id))
 	{
 		return;
 	}
 
-	new TeamName:iUserTeam = get_member(id, m_iTeam);
 	if(iUserTeam != TEAM_TERRORIST && iUserTeam != TEAM_CT)
 	{
 		g_iLastTeam[id] = iUserTeam;
 		g_bMenuShownForTeam[id] = false;
+		remove_task(id);
 		return;
 	}
 
 	if(g_iLastTeam[id] != iUserTeam)
 	{
-		rg_reset_user_model(id);
-		UpdateCurrentModelData(id);
-
 		g_iLastTeam[id] = iUserTeam;
 		g_bMenuShownForTeam[id] = false;
+
+		remove_task(id);
+		set_task(0.2, "HandlePlayerTeamChanged", id);
+		return;
 	}
 
 	if(g_bMenuShownForTeam[id])
@@ -422,6 +426,45 @@ public OnPlayerTeamInfo()
 	remove_task(id);
 	set_task(5.0, "Create_Model_Menu", id);
 	g_bMenuShownForTeam[id] = true;
+}
+
+public HandlePlayerTeamChanged(id)
+{
+	if(!is_user_connected(id) || is_user_bot(id))
+	{
+		return;
+	}
+
+	rg_reset_user_model(id);
+	UpdateCurrentModelData(id);
+
+	if(g_bMenuShownForTeam[id])
+	{
+		return;
+	}
+
+	set_task(5.0, "Create_Model_Menu", id);
+	g_bMenuShownForTeam[id] = true;
+}
+
+TeamName:TeamNameFromInfo(const sTeam[])
+{
+	if(equali(sTeam, "TERRORIST"))
+	{
+		return TEAM_TERRORIST;
+	}
+
+	if(equali(sTeam, "CT"))
+	{
+		return TEAM_CT;
+	}
+
+	if(equali(sTeam, "SPECTATOR"))
+	{
+		return TEAM_SPECTATOR;
+	}
+
+	return TEAM_UNASSIGNED;
 }
 //	Отмена меню
 public player_cancel_menu(task_id)
