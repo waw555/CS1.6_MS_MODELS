@@ -22,6 +22,8 @@
 #pragma semicolon 1
 
 new const SETTINGS_FILE[] = "ms_models.ini";				//	Файл со списком моделей
+new g_pCvarSettingsFilePath;									//	Путь к файлу с моделями
+new g_sSettingsFilePath[MAX_MODEL_PATH];						//	Текущий путь к файлу с моделями
 
 new g_iLoadModelCount;										//	Количество загруженных моделей
 new g_aModelName[MAX_MODEL_COUNT][MAX_MODEL_NAME];			//	Название модели для меню
@@ -48,6 +50,7 @@ public plugin_init()
 	register_clcmd ( "say_team /model" , "Create_Model_Menu" , ADMIN_ALL , "- Показать меню моделей" );
 	register_clcmd ( "say_team /models" , "Create_Model_Menu" , ADMIN_ALL , "- Показать меню моделей" );
 	register_concmd ("ms_models", "Create_Model_Menu", ADMIN_ALL);
+	g_pCvarSettingsFilePath = register_cvar("ms_models_ini_path", SETTINGS_FILE);
 	
 	//РЕГИСТРАЦИЯ СОБЫТИЙ   
 	register_event("TextMsg", "player_change_team", "a", "1=1", "2&Game_join_terrorist", "2&Game_join_ct", "2&Game_join_terrorist_auto", "2&Game_join_ct_auto"); //Регистрируем событие Смена Команды
@@ -66,18 +69,34 @@ public plugin_precache()
     // Загрузка моделей
 	
 	new sConfigsDir[MAX_MODEL_PATH];
-	get_localinfo("amxx_configsdir", sConfigsDir, charsmax(sConfigsDir));
+	new sConfiguredPath[MAX_MODEL_PATH];
+
 	get_configsdir(sConfigsDir, charsmax(sConfigsDir));
-	
-	format(sConfigsDir, MAX_MODEL_PATH-1, "%s/%s", sConfigsDir, SETTINGS_FILE);
-	if(file_exists(sConfigsDir))	//	Если файл с настройками существует
+	get_pcvar_string(g_pCvarSettingsFilePath, sConfiguredPath, charsmax(sConfiguredPath));
+	trim(sConfiguredPath);
+
+	if(!sConfiguredPath[0])
 	{
-		log_amx("Загружен файл с моделями = %s", sConfigsDir);
-		loadSettings(sConfigsDir);					// Загрузка списка моделей
+		copy(sConfiguredPath, charsmax(sConfiguredPath), SETTINGS_FILE);
+	}
+
+	if(containi(sConfiguredPath, "/") != -1 || containi(sConfiguredPath, "\\") != -1)
+	{
+		copy(g_sSettingsFilePath, charsmax(g_sSettingsFilePath), sConfiguredPath);
 	}
 	else
 	{
-		log_amx("Не найден файл с моделями - %s", sConfigsDir);
+		format(g_sSettingsFilePath, charsmax(g_sSettingsFilePath), "%s/%s", sConfigsDir, sConfiguredPath);
+	}
+
+	if(file_exists(g_sSettingsFilePath))	//	Если файл с настройками существует
+	{
+		log_amx("Загружен файл с моделями = %s", g_sSettingsFilePath);
+		loadSettings(g_sSettingsFilePath);					// Загрузка списка моделей
+	}
+	else
+	{
+		log_amx("Не найден файл с моделями - %s", g_sSettingsFilePath);
 	}
 	
 	
@@ -153,7 +172,7 @@ loadSettings(szFilename[])
 				
 				g_iLoadModelCount++;
 			}else{
-				log_amx("Не найден файл %s. Загрузите файл на сервер или проверьте правильно ли заполнен файл с моделями - %s", sModelPath, SETTINGS_FILE );
+				log_amx("Не найден файл %s. Загрузите файл на сервер или проверьте правильно ли заполнен файл с моделями - %s", sModelPath, g_sSettingsFilePath );
 			}
 		}
 
@@ -162,7 +181,7 @@ loadSettings(szFilename[])
 
 	if (g_iLoadModelCount == 0)
 	{
-		log_amx("Не загружено ни одной модели. Проверьте правильность заполнения файла с моделями - %s", SETTINGS_FILE);
+		log_amx("Не загружено ни одной модели. Проверьте правильность заполнения файла с моделями - %s", g_sSettingsFilePath);
 	}
 	else
 	{
