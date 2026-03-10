@@ -289,7 +289,6 @@ public Create_Model_Menu(id)
 
 			if(iModelsOnPage == 6)
 			{
-				menu_addblank2(ModelMenu);
 				menu_additem(ModelMenu, sResetMenuItem, "reset");
 				iModelsOnPage = 0;
 			}
@@ -299,7 +298,6 @@ public Create_Model_Menu(id)
 		{
 			if(iModelsOnPage > 0)
 			{
-				menu_addblank2(ModelMenu);
 				menu_additem(ModelMenu, sResetMenuItem, "reset");
 			}
 
