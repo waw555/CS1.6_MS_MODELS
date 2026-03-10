@@ -295,12 +295,12 @@ public Create_Model_Menu(id)
 			}
 		}
 
-			if(iUserModelCount)
+		if(iUserModelCount)
+		{
+			if(iModelsOnPage > 0)
 			{
-				if(iModelsOnPage > 0)
-				{
-					menu_additem(ModelMenu, sResetMenuItem, "reset");
-				}
+				menu_additem(ModelMenu, sResetMenuItem, "reset");
+			}
 
 			client_cmd(id, "spk sound/events/tutor_msg.wav");
 		}
