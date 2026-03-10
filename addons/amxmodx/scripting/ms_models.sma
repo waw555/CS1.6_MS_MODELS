@@ -1,9 +1,9 @@
 #include <amxmodx>
 #include <amxmisc>
-#include <cstrike>
+#include <reapi>
 
 #define PLUGIN "Masks-Show Models"
-#define VERSION "1.0.1-17.01.2026"
+#define VERSION "1.1.0-10.03.2026"
 #define AUTHOR "WAW555"
 #define URL "www.masks-show.ru"
 #define DESCRIPTION "Plugin for set player model"
@@ -61,9 +61,8 @@ public plugin_init()
 	register_concmd ("ms_models", "Create_Model_Menu", ADMIN_ALL);
 	EnsureSettingsPathCvarRegistered();
 	
-	//РЕГИСТРАЦИЯ СОБЫТИЙ   
-	register_event("TextMsg", "player_change_team", "a", "1=1", "2&Game_join_terrorist", "2&Game_join_ct", "2&Game_join_terrorist_auto", "2&Game_join_ct_auto"); //Регистрируем событие Смена Команды
-	register_clcmd("joinclass", "player_chose_class");	// Игрок выбрал персонажа и вошел в игру
+	// ReAPI: используем хук спавна вместо TextMsg/joinclass.
+	RegisterHookChain(RG_CBasePlayer_Spawn, "OnPlayerSpawn_Post", true);
 	
 	
 	g_i_MessageIDSayText = get_user_msgid("SayText");								//	Функция цветного чата
@@ -229,9 +228,9 @@ public Create_Model_Menu(id)
 		new ModelMenu = menu_create(sMenuName, "ModelMenu_handler");
 		new iUserModelCount = 0;
 		new iUserFlags = get_user_flags(id);
-		new iUserTeam = get_user_team(id);
-	
-		if (iUserTeam == 1)	//	Команда Террористы
+		new TeamName:iUserTeam = get_member(id, m_iTeam);
+
+		if (iUserTeam == TEAM_TERRORIST)	//	Команда Террористы
 		{
 			for(new i=0; i < g_iLoadModelCount; i++)
 			{			
@@ -242,7 +241,7 @@ public Create_Model_Menu(id)
 				}
 			}
 		} 
-		else if (iUserTeam == 2)	//	Команда Контр-Террористы
+		else if (iUserTeam == TEAM_CT)	//	Команда Контр-Террористы
 		{
 			for(new i=0; i < g_iLoadModelCount; i++)
 			{			
@@ -253,7 +252,7 @@ public Create_Model_Menu(id)
 				}
 			}
 		} 
-		else if (get_user_team(id) == 3)	//	Команда Наблюдатель
+		else if (iUserTeam == TEAM_SPECTATOR)	//	Команда Наблюдатель
 		{
 			log_amx("Команда игрока Наблюдатель");
 			client_cmd(id, "spk sound/events/friend_died.wav");
@@ -319,10 +318,10 @@ public ModelMenu_handler(id, ModelMenu, item)
 	if(equal(sModelFile, "reset"))
 	{
 		remove_task(id+5987);
-		cs_reset_user_model(id);
+		rg_reset_user_model(id);
 		
 		new s_ModelFile[MAX_MODEL_FILE];
-		cs_get_user_model(id, s_ModelFile, charsmax(s_ModelFile));	//	Получаем текущую модель игрока
+		rg_get_user_model(id, s_ModelFile, charsmax(s_ModelFile));	//	Получаем текущую модель игрока
 		g_sCurrentModelFile[id] = s_ModelFile;
 		g_sCurrentModelName[id] = s_ModelFile;
 		client_printc(id, "\g%L \d%L \g%s", id, "MS_MODEL_ATTENTION",id, "MS_MODEL_PLAYER_SET_MODEL", g_sCurrentModelName[id]);
@@ -333,7 +332,7 @@ public ModelMenu_handler(id, ModelMenu, item)
 		remove_task(id+5987);
 		g_sCurrentModelName[id] = sModelName;
 		g_sCurrentModelFile[id] = sModelFile;
-		cs_set_user_model(id, sModelFile);
+		rg_set_user_model(id, sModelFile, true);
 		client_printc(id, "\g%L \d%L \g%s", id, "MS_MODEL_ATTENTION",id, "MS_MODEL_PLAYER_SET_MODEL", g_sCurrentModelName[id]);
 		client_cmd(id, "spk sound/events/tutor_msg.wav");
 	}
@@ -346,47 +345,26 @@ public menu_page_more_back(id)
 	client_cmd(id, "spk sound/events/tutor_msg.wav");
 }
 
-// Игрок выбрал персонажа
-public player_chose_class(id)
+// ReAPI: обработка спавна игрока
+public OnPlayerSpawn_Post(const id)
 {
-	if(is_user_connected(id) && !is_user_bot(id))	//	Если игрок подключен и не бот
+	if(!is_user_connected(id) || is_user_bot(id) || !is_user_alive(id))
 	{
-		cs_reset_user_model(id);	//	Сбрасываем модель игрока
-		new s_ModelFile[MAX_MODEL_FILE];
-		cs_get_user_model(id, s_ModelFile, charsmax(s_ModelFile));	//	Получаем текущую модель игрока
-		g_sCurrentModelFile[id] = s_ModelFile;	//	Записываем в глобавльную переменную текущую модель игрока
-		g_sCurrentModelName[id] = s_ModelFile;	//	Записываем в глобавльную переменную текущую модель игрока
+		return HC_CONTINUE;
 	}
+
+	rg_reset_user_model(id);
+
+	new s_ModelFile[MAX_MODEL_FILE];
+	rg_get_user_model(id, s_ModelFile, charsmax(s_ModelFile));
+	g_sCurrentModelFile[id] = s_ModelFile;
+	g_sCurrentModelName[id] = s_ModelFile;
+
 	query_client_cvar(id, "cl_minmodels", "cvar_query_callback");
 	remove_task(id);
-	set_task( 5.0, "Create_Model_Menu", id );//Открываем меню для смены модели	
-}
+	set_task(5.0, "Create_Model_Menu", id);
 
-// Игрок поменял команду
-public player_change_team()
-{
-	
-	new s_Name[64], id; // Имя игрока и ID игрока
-	read_data(3, s_Name, charsmax(s_Name)); //Считываем данные игрока
-	id = get_user_index(s_Name); // получаем индекс игрока
-
-	if(!id)
-	{
-		return;
-	}
-	
-	if(is_user_connected(id) && !is_user_bot(id))	//	Если игрок подключен и не бот
-	{
-		cs_reset_user_model(id);	//	Сбрасываем модель игрока
-		new s_ModelFile[MAX_MODEL_FILE];
-		cs_get_user_model(id, s_ModelFile, charsmax(s_ModelFile));	//	Получаем текущую модель игрока
-		g_sCurrentModelFile[id] = s_ModelFile;	//	Записываем в глобавльную переменную текущую модель игрока
-		g_sCurrentModelName[id] = s_ModelFile;	//	Записываем в глобавльную переменную текущую модель игрока
-		query_client_cvar(id, "cl_minmodels", "cvar_query_callback");
-		remove_task(id);
-		set_task( 5.0, "Create_Model_Menu", id );//Открываем меню для смены модели
-	}
-
+	return HC_CONTINUE;
 }
 //	Отмена меню
 public player_cancel_menu(task_id)
