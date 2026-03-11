@@ -400,6 +400,7 @@ show_models_menu(id, bool:bPlaySound)
 	}
 
 	new menu[MAX_PARSE_TEXT], len;
+	new iMenuKeys = (1<<9);
 	new sCurrentModelName[MAX_MODEL_NAME];
 	copy(sCurrentModelName, charsmax(sCurrentModelName), g_sCurrentModelName[id]);
 	strtoupper(sCurrentModelName);
@@ -418,25 +419,38 @@ show_models_menu(id, bool:bPlaySound)
 			break;
 		}
 
-		len += formatex(menu[len], charsmax(menu) - len, "%d. %s^n", i + 1, g_aModelName[modelIndex]);
+		new bool:bIsCurrentModel = equal(g_aModelFile[modelIndex], g_sCurrentModelFile[id]);
+
+		if(!bIsCurrentModel)
+		{
+			iMenuKeys |= (1<<i);
+			len += formatex(menu[len], charsmax(menu) - len, "%d. \w%s^n", i + 1, g_aModelName[modelIndex]);
+		}
+		else
+		{
+			len += formatex(menu[len], charsmax(menu) - len, "%d. \d%s\r (%L)^n", i + 1, g_aModelName[modelIndex], id, "MS_MODEL_MENU_CURRENT");
+		}
 	}
 
 	new iResetItem = iModelsOnPage + 1;
+	iMenuKeys |= (1<<(iResetItem - 1));
 	len += formatex(menu[len], charsmax(menu) - len, "^n%d. \w%L^n", iResetItem, id, "MS_MODEL_MENU_RESET_MODEL");
 
 	if(g_iMenuPage[id] > 0)
 	{
+		iMenuKeys |= (1<<7);
 		len += formatex(menu[len], charsmax(menu) - len, "8. \w%L^n", id, "MS_MODEL_MENU_BACK");
 	}
 
 	if(g_iMenuPage[id] < iMaxPage)
 	{
+		iMenuKeys |= (1<<8);
 		len += formatex(menu[len], charsmax(menu) - len, "9. \w%L^n", id, "MS_MODEL_MENU_NEXT");
 	}
 
 	len += formatex(menu[len], charsmax(menu) - len, "0. \w%L", id, "MS_MODEL_MENU_EXIT");
 
-	show_menu(id, 1023, menu, -1, "MSModelsMenu");
+	show_menu(id, iMenuKeys, menu, -1, "MSModelsMenu");
 
 	if(bPlaySound)
 	{
