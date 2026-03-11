@@ -404,7 +404,7 @@ show_models_menu(id, bool:bPlaySound)
 	copy(sCurrentModelName, charsmax(sCurrentModelName), g_sCurrentModelName[id]);
 	strtoupper(sCurrentModelName);
 
-	len += formatex(menu[len], charsmax(menu) - len, "\w%L %s^n^n\w%L^n^n", id, "MS_MODEL_CURRENT_MODEL_NAME", sCurrentModelName, id, "MS_MODEL_MENU_NAME");
+	len += formatex(menu[len], charsmax(menu) - len, "\y%L \r%s^n^n\w%L^n^n", id, "MS_MODEL_CURRENT_MODEL_NAME", sCurrentModelName, id, "MS_MODEL_MENU_NAME");
 
 	new iModelsOnPage = GetModelsOnPage(iVisibleModels, g_iMenuPage[id]);
 	new iStartPos = GetPageStartPosition(iVisibleModels, g_iMenuPage[id]);
