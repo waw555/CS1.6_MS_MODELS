@@ -419,7 +419,7 @@ show_models_menu(id, bool:bPlaySound)
 			break;
 		}
 
-		new bool:bIsCurrentModel = equal(g_aModelFile[modelIndex], g_sCurrentModelFile[id]);
+		new bool:bIsCurrentModel = bool:equal(g_aModelFile[modelIndex], g_sCurrentModelFile[id]);
 
 		if(!bIsCurrentModel)
 		{
