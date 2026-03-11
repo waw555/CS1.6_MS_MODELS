@@ -18,7 +18,8 @@
 #define MAX_MODEL_ACCESS 32	//	Максимальное количество символов в правах доступа к модели (Пример: abcd или ghtuvz или a)
 #define MAX_MODEL_PATH 256	//	Максимальная длина пути к файлу модели
 #define MAX_PLAYERS 32		//	Максимальное количество игроков
-#define MODELS_PER_PAGE 6	//	Количество моделей на одной странице меню перед пунктом сброса
+#define MODELS_PER_PAGE_MIDDLE 6	//	Количество моделей на промежуточных страницах (между первой и последней)
+#define MODELS_PER_PAGE_EDGE 7		//	Количество моделей на первой/последней странице
 
 #pragma semicolon 1
 
@@ -308,6 +309,71 @@ GetModelIndexByVisiblePosition(visiblePosition, iUserFlags, TeamName:iUserTeam)
 	return -1;
 }
 
+GetPageCount(iVisibleModels)
+{
+	if(iVisibleModels <= MODELS_PER_PAGE_EDGE)
+	{
+		return 1;
+	}
+
+	new iPageCount = 2;
+	new iCapacity = MODELS_PER_PAGE_EDGE * 2;
+
+	while(iVisibleModels > iCapacity)
+	{
+		iPageCount++;
+		iCapacity += MODELS_PER_PAGE_MIDDLE;
+	}
+
+	return iPageCount;
+}
+
+GetMaxPage(iVisibleModels)
+{
+	new iPageCount = GetPageCount(iVisibleModels);
+	return (iPageCount > 0) ? (iPageCount - 1) : 0;
+}
+
+GetPageStartPosition(iVisibleModels, iPage)
+{
+	new iMaxPage = GetMaxPage(iVisibleModels);
+
+	if(iMaxPage <= 0 || iPage <= 0)
+	{
+		return 0;
+	}
+
+	if(iPage >= iMaxPage)
+	{
+		return iVisibleModels - MODELS_PER_PAGE_EDGE;
+	}
+
+	return MODELS_PER_PAGE_EDGE + ((iPage - 1) * MODELS_PER_PAGE_MIDDLE);
+}
+
+GetModelsOnPage(iVisibleModels, iPage)
+{
+	new iMaxPage = GetMaxPage(iVisibleModels);
+
+	if(iMaxPage <= 0)
+	{
+		return min(iVisibleModels, MODELS_PER_PAGE_EDGE);
+	}
+
+	if(iPage <= 0)
+	{
+		return MODELS_PER_PAGE_EDGE;
+	}
+
+	if(iPage >= iMaxPage)
+	{
+		new iLastPageCount = iVisibleModels - (MODELS_PER_PAGE_EDGE + ((iMaxPage - 1) * MODELS_PER_PAGE_MIDDLE));
+		return min(max(iLastPageCount, 1), MODELS_PER_PAGE_EDGE);
+	}
+
+	return MODELS_PER_PAGE_MIDDLE;
+}
+
 show_models_menu(id, bool:bPlaySound)
 {
 	new iUserFlags = get_user_flags(id);
@@ -326,7 +392,7 @@ show_models_menu(id, bool:bPlaySound)
 	}
 
 	new iVisibleModels = GetVisibleModelCount(iUserFlags, iUserTeam);
-	new iMaxPage = iVisibleModels > 0 ? (iVisibleModels - 1) / MODELS_PER_PAGE : 0;
+	new iMaxPage = GetMaxPage(iVisibleModels);
 
 	if(g_iMenuPage[id] > iMaxPage)
 	{
@@ -338,12 +404,14 @@ show_models_menu(id, bool:bPlaySound)
 	copy(sCurrentModelName, charsmax(sCurrentModelName), g_sCurrentModelName[id]);
 	strtoupper(sCurrentModelName);
 
-	len += formatex(menu[len], charsmax(menu) - len, "\w%L \r%s^n^n\y%L^n^n", id, "MS_MODEL_CURRENT_MODEL_NAME", sCurrentModelName, id, "MS_MODEL_MENU_NAME");
+	len += formatex(menu[len], charsmax(menu) - len, "\w%L %s^n^n\w%L^n^n", id, "MS_MODEL_CURRENT_MODEL_NAME", sCurrentModelName, id, "MS_MODEL_MENU_NAME");
 
-	new startPos = g_iMenuPage[id] * MODELS_PER_PAGE;
-	for(new i = 0; i < MODELS_PER_PAGE; i++)
+	new iModelsOnPage = GetModelsOnPage(iVisibleModels, g_iMenuPage[id]);
+	new iStartPos = GetPageStartPosition(iVisibleModels, g_iMenuPage[id]);
+
+	for(new i = 0; i < iModelsOnPage; i++)
 	{
-		new modelIndex = GetModelIndexByVisiblePosition(startPos + i, iUserFlags, iUserTeam);
+		new modelIndex = GetModelIndexByVisiblePosition(iStartPos + i, iUserFlags, iUserTeam);
 
 		if(modelIndex == -1)
 		{
@@ -353,10 +421,20 @@ show_models_menu(id, bool:bPlaySound)
 		len += formatex(menu[len], charsmax(menu) - len, "%d. %s^n", i + 1, g_aModelName[modelIndex]);
 	}
 
-	len += formatex(menu[len], charsmax(menu) - len, "^n7. \r%L^n^n", id, "MS_MODEL_MENU_RESET_MODEL");
-	len += formatex(menu[len], charsmax(menu) - len, "8. %s%L^n", (g_iMenuPage[id] < iMaxPage) ? "\w" : "\d", id, "MS_MODEL_MENU_NEXT");
-	len += formatex(menu[len], charsmax(menu) - len, "9. %s%L^n", (g_iMenuPage[id] > 0) ? "\w" : "\d", id, "MS_MODEL_MENU_BACK");
-	len += formatex(menu[len], charsmax(menu) - len, "0. \d%L", id, "MS_MODEL_MENU_EXIT");
+	new iResetItem = iModelsOnPage + 1;
+	len += formatex(menu[len], charsmax(menu) - len, "^n%d. \w%L^n", iResetItem, id, "MS_MODEL_MENU_RESET_MODEL");
+
+	if(g_iMenuPage[id] > 0)
+	{
+		len += formatex(menu[len], charsmax(menu) - len, "8. \w%L^n", id, "MS_MODEL_MENU_BACK");
+	}
+
+	if(g_iMenuPage[id] < iMaxPage)
+	{
+		len += formatex(menu[len], charsmax(menu) - len, "9. \w%L^n", id, "MS_MODEL_MENU_NEXT");
+	}
+
+	len += formatex(menu[len], charsmax(menu) - len, "0. \w%L", id, "MS_MODEL_MENU_EXIT");
 
 	show_menu(id, 1023, menu, -1, "MSModelsMenu");
 
@@ -412,12 +490,33 @@ public ModelMenu_handler(id, key)
 {
 	new iUserFlags = get_user_flags(id);
 	new TeamName:iUserTeam = get_member(id, m_iTeam);
+	new iVisibleModels = GetVisibleModelCount(iUserFlags, iUserTeam);
+	new iMaxPage = GetMaxPage(iVisibleModels);
+	new iModelsOnPage = GetModelsOnPage(iVisibleModels, g_iMenuPage[id]);
+	new iStartPos = GetPageStartPosition(iVisibleModels, g_iMenuPage[id]);
+	new iResetKey = iModelsOnPage;
 
 	switch(key)
 	{
-		case 0..5:
+		case 0..6:
 		{
-			new modelIndex = GetModelIndexByVisiblePosition((g_iMenuPage[id] * MODELS_PER_PAGE) + key, iUserFlags, iUserTeam);
+			if(key == iResetKey)
+			{
+				remove_task(id + 5987);
+				rg_reset_user_model(id);
+				UpdateCurrentModelData(id);
+				client_printc(id, "\g%L \d%L \g%s", id, "MS_MODEL_ATTENTION", id, "MS_MODEL_PLAYER_SET_MODEL", g_sCurrentModelName[id]);
+				client_cmd(id, "spk sound/events/tutor_msg.wav");
+				return PLUGIN_HANDLED;
+			}
+
+			if(key >= iModelsOnPage)
+			{
+				show_models_menu(id, false);
+				return PLUGIN_HANDLED;
+			}
+
+			new modelIndex = GetModelIndexByVisiblePosition(iStartPos + key, iUserFlags, iUserTeam);
 			if(modelIndex == -1)
 			{
 				show_models_menu(id, false);
@@ -433,24 +532,11 @@ public ModelMenu_handler(id, key)
 			return PLUGIN_HANDLED;
 		}
 
-		case 6:
-		{
-			remove_task(id + 5987);
-			rg_reset_user_model(id);
-			UpdateCurrentModelData(id);
-			client_printc(id, "\g%L \d%L \g%s", id, "MS_MODEL_ATTENTION", id, "MS_MODEL_PLAYER_SET_MODEL", g_sCurrentModelName[id]);
-			client_cmd(id, "spk sound/events/tutor_msg.wav");
-			return PLUGIN_HANDLED;
-		}
-
 		case 7:
 		{
-			new iVisibleModels = GetVisibleModelCount(iUserFlags, iUserTeam);
-			new iMaxPage = iVisibleModels > 0 ? (iVisibleModels - 1) / MODELS_PER_PAGE : 0;
-
-			if(g_iMenuPage[id] < iMaxPage)
+			if(g_iMenuPage[id] > 0)
 			{
-				g_iMenuPage[id]++;
+				g_iMenuPage[id]--;
 				show_models_menu(id, true);
 			}
 			else
@@ -462,9 +548,9 @@ public ModelMenu_handler(id, key)
 
 		case 8:
 		{
-			if(g_iMenuPage[id] > 0)
+			if(g_iMenuPage[id] < iMaxPage)
 			{
-				g_iMenuPage[id]--;
+				g_iMenuPage[id]++;
 				show_models_menu(id, true);
 			}
 			else
