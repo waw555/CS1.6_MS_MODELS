@@ -18,5 +18,5 @@ MS_MODEL_MENU_EXIT = Выход
 MS_MODEL_MENU_NAME = ВЫБОР МОДЕЛИ
 MS_MODEL_MENU_NEXT = Вперед
 MS_MODEL_MENU_RESET_MODEL = Сбросить модель
-MS_MODEL_MENU_CURRENT = текущая
+MS_MODEL_MENU_CURRENT = Текущая
 MS_MODEL_PLAYER_SET_MODEL = Вы установили модель: 
