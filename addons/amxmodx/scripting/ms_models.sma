@@ -428,7 +428,7 @@ show_models_menu(id, bool:bPlaySound)
 		}
 		else
 		{
-			len += formatex(menu[len], charsmax(menu) - len, "%d. \d%s\r (%L)^n", i + 1, g_aModelName[modelIndex], id, "MS_MODEL_MENU_CURRENT");
+			len += formatex(menu[len], charsmax(menu) - len, "%d. \d%s \r(%L)\w^n", i + 1, g_aModelName[modelIndex], id, "MS_MODEL_MENU_CURRENT");
 		}
 	}
 
